@@ -6,3 +6,4 @@ val queue_front : t -> Message.envelope -> unit
 val next : t -> Message.envelope option
 val size : t -> int
 val is_empty : t -> bool
+val clear : t -> unit

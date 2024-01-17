@@ -9,3 +9,4 @@ val peek : 'a t -> 'a
 val pop : 'a t -> 'a option
 val is_empty : 'a t -> bool
 val create : unit -> 'a t
+val clear : 'a t -> unit

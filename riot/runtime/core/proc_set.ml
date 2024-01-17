@@ -1,7 +1,12 @@
-module PidSet = Set.Make (struct
-  type t = Process.t
+open Util
 
-  let compare (a : t) (b : t) = Pid.compare (Process.pid a) (Process.pid b)
+module PidSet = Set.Make (struct
+  type t = Process.t Weak_ptr.t
+
+  let compare (a : t) (b : t) =
+    match (Weak_ptr.get a, Weak_ptr.get b) with
+    | Some a, Some b -> Pid.compare (Process.pid a) (Process.pid b)
+    | _ -> -1
 end)
 
 type t = { _set : PidSet.t Atomic.t } [@@unboxed]

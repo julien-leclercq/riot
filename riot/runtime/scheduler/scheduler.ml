@@ -8,7 +8,6 @@ type t = {
   uid : Uid.t; [@warning "-69"]
   rnd : Random.State.t;
   run_queue : Proc_queue.t;
-  sleep_set : Proc_set.t;
   timers : Timer_wheel.t;
   idle_mutex : Mutex.t;
   idle_condition : Condition.t;
@@ -55,7 +54,6 @@ module Scheduler = struct
       uid;
       rnd = Random.State.copy rnd;
       run_queue = Proc_queue.create ();
-      sleep_set = Proc_set.create ();
       timers = Timer_wheel.create ();
       idle_mutex = Mutex.create ();
       idle_condition = Condition.create ();
@@ -80,7 +78,6 @@ module Scheduler = struct
 
   let add_to_run_queue (sch : t) (proc : Process.t) =
     Mutex.protect sch.idle_mutex @@ fun () ->
-    Proc_set.remove sch.sleep_set proc;
     Proc_queue.queue sch.run_queue proc;
     Condition.signal sch.idle_condition;
     Log.trace (fun f ->
@@ -89,6 +86,7 @@ module Scheduler = struct
           Pid.pp proc.pid)
 
   let awake_process pool (proc : Process.t) =
+    Log.trace (fun f -> f "Awaking process %a" Pid.pp proc.pid);
     List.iter
       (fun (sch : t) ->
         if Scheduler_uid.equal sch.uid proc.sid then add_to_run_queue sch proc)
@@ -226,7 +224,7 @@ module Scheduler = struct
           | None -> ());
           k (Continue ())
       | None ->
-          let token = Gluon.Token.make proc in
+          let token = Gluon.Token.make (Weak_ptr.make proc) in
           Log.debug (fun f ->
               f "syscall(%s) %a -> registering %a" name Pid.pp proc.pid
                 Gluon.Token.pp token);
@@ -278,18 +276,13 @@ module Scheduler = struct
       Process.mark_as_runnable proc;
       Log.debug (fun f -> f "Waking up process %a" Pid.pp proc.pid);
       add_to_run_queue sch proc)
-    else (
-      Proc_set.add sch.sleep_set proc;
-      Log.debug (fun f -> f "Hibernated process %a" Pid.pp proc.pid);
-      Log.trace (fun f -> f "sleep_set: %d" (Proc_set.size sch.sleep_set)))
+    else Log.debug (fun f -> f "Hibernated process %a" Pid.pp proc.pid)
 
-  let handle_exit_proc pool (_sch : t) proc (reason : Process.exit_reason) =
-    Log.debug (fun f -> f "unregistering process %a" Pid.pp (Process.pid proc));
+  let handle_exit_proc pool (sch : t) proc (reason : Process.exit_reason) =
+    Log.trace (fun f -> f "unregistering process %a" Pid.pp (Process.pid proc));
 
     Process.consume_ready_tokens proc (fun (_token, source) ->
         Gluon.Poll.deregister pool.io_scheduler.poll source |> Result.get_ok);
-
-    Proc_registry.remove pool.registry (Process.pid proc);
 
     (* if it's main process we want to terminate the entire program *)
     (if Process.is_main proc then
@@ -339,9 +332,15 @@ module Scheduler = struct
             Log.debug (fun f ->
                 f "marking linked %a as dead" Pid.pp linked_proc.pid);
             awake_process pool linked_proc)
-      linked_pids
+      linked_pids;
 
-  let handle_run_proc pool (sch : t) proc =
+    Proc_table.remove pool.processes proc.pid;
+    Proc_registry.remove pool.registry proc.pid;
+    Proc_queue.remove sch.run_queue proc;
+    Process.free proc;
+    Log.error (fun f -> f "terminated %a" Pid.pp proc.pid)
+
+  let[@inline never] handle_run_proc pool (sch : t) proc =
     Log.trace (fun f -> f "Running process %a" Process.pp proc);
     let exception Terminated_while_running of Process.exit_reason in
     try
@@ -374,7 +373,6 @@ module Scheduler = struct
         add_to_run_queue sch proc
 
   let step_process pool (sch : t) (proc : Process.t) =
-    !Tracer.tracer_proc_run (sch.uid |> Scheduler_uid.to_int) proc;
     match Process.state proc with
     | Finalized -> failwith "finalized processes should never be stepped on"
     | Waiting_io _ -> ()
@@ -389,6 +387,20 @@ module Scheduler = struct
     let exception Exit in
     (try
        while true do
+         Jemalloc.epoch ();
+
+         Log.trace (fun f ->
+             let gc_stat = Gc.quick_stat () in
+             f
+               "[gc: fragments=%d stack_size=%d live_blocks=%d compactions=%d \
+                live_words=%d]"
+               gc_stat.fragments gc_stat.stack_size gc_stat.live_blocks
+               gc_stat.compactions gc_stat.live_words);
+         Log.trace (fun f ->
+             let stats = Jemalloc.get_memory_stats () in
+             f "[jemalloc: allocated=%d active=%d resident=%d mapped=%d]"
+               stats.allocated stats.active stats.resident stats.mapped);
+
          if pool.stop then raise_notrace Exit;
 
          Mutex.lock sch.idle_mutex;
@@ -408,8 +420,10 @@ module Scheduler = struct
                step_process pool sch proc
            | None -> ()
          done;
+         tick_timers pool sch;
 
-         tick_timers pool sch
+         Jemalloc.release_free_memory ();
+         ()
        done
      with Exit -> ());
     Log.trace (fun f -> f "< exit worker loop")
@@ -438,19 +452,22 @@ module Io_scheduler = struct
     List.iter
       (fun event ->
         let token = Gluon.Event.token event in
-        let proc : Process.t = Gluon.Token.unsafe_to_value token in
-        Log.debug (fun f ->
-            f "polled %a - %a" Gluon.Token.pp token Pid.pp proc.pid);
-        match Process.state proc with
-        | Waiting_io { source; _ } ->
+        let proc : Process.t Weak_ptr.t = Gluon.Token.unsafe_to_value token in
+        match Weak_ptr.get proc with
+        | None -> ()
+        | Some proc -> (
             Log.debug (fun f ->
-                f "awaking proc %a %a" Process.pp proc Gluon.Token.pp token);
-            Gluon.Poll.deregister io.poll source |> Result.get_ok;
-            if Process.is_alive proc then (
-              Process.add_ready_token proc token source;
-              Process.mark_as_runnable proc;
-              awake_process pool proc)
-        | _ -> ())
+                f "polled %a - %a" Gluon.Token.pp token Pid.pp proc.pid);
+            match Process.state proc with
+            | Waiting_io { source; _ } ->
+                Log.debug (fun f ->
+                    f "awaking proc %a %a" Process.pp proc Gluon.Token.pp token);
+                Gluon.Poll.deregister io.poll source |> Result.get_ok;
+                if Process.is_alive proc then (
+                  Process.add_ready_token proc token source;
+                  Process.mark_as_runnable proc;
+                  awake_process pool proc)
+            | _ -> ()))
       events
 
   let run pool io () =

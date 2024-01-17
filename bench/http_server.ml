@@ -22,9 +22,9 @@ let main () =
 
     let _conn =
       spawn @@ fun () ->
-      let bufs = IO.Iovec.create ~size:(1024 * 50) () in
       let rec conn_loop () =
         let rec handle_request () =
+          let bufs = IO.Iovec.create ~size:1024 () in
           let* _req =
             Net.Tcp_stream.receive ~timeout:5_000_000_000L conn ~bufs
           in
@@ -48,7 +48,7 @@ let main () =
         Logger.error (fun f -> f "error: %a" IO.pp_err (Obj.magic err))
   in
 
-  let _ = List.init 99 (fun _ -> spawn_link acceptor) in
+  let _ = List.init 0 (fun _ -> spawn_link acceptor) in
   acceptor ()
 
-let () = Riot.run @@ main
+let () = Riot.run ~workers:0 @@ main

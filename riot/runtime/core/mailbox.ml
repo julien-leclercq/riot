@@ -23,3 +23,7 @@ let next (t : t) =
 
 let size (t : t) = Atomic.get t.size
 let is_empty (t : t) = Lf_queue.is_empty t.queue
+
+let clear t =
+  Lf_queue.clear t.queue;
+  Atomic.set t.size 0

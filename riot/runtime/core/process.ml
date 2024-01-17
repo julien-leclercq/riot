@@ -84,10 +84,30 @@ let make sid fn =
       syscall_timeout = Atomic.make None;
     }
   in
-  Log.debug (fun f ->
-      f "Making process with pid=%a and size=%d" Pid.pp pid
+  Log.error (fun f ->
+      f "Making process with pid=%a (sizeof %d words)" Pid.pp pid
         (Obj.repr proc |> Obj.reachable_words));
+  Gc.finalise
+    (fun proc ->
+      Format.printf "finalized process with pid=%a (sizeof %d words)\r\n%!" Pid.pp
+        proc.pid
+        (Obj.repr proc |> Obj.reachable_words))
+    proc;
   proc
+
+let free t =
+  let exception Freed in
+  t.cont <- Proc_state.make (fun () -> Exception Freed) Proc_effect.Yield;
+  Atomic.set t.state Finalized;
+  Mailbox.clear t.mailbox;
+  Mailbox.clear t.save_queue;
+  Pid.Map.clear t.monitors;
+  Pid.Map.clear t.monitored_by;
+  Atomic.set t.links [];
+  Atomic.set t.recv_timeout None;
+  Atomic.set t.syscall_timeout None;
+  Util.Lf_queue.clear t.ready_tokens;
+  ()
 
 let rec pp ppf t =
   Format.fprintf ppf "Process %a { state = %a; messages = %d; flags = %a }"

@@ -117,6 +117,8 @@ let run () =
     (* if List.length events > 0 then *)
     (*   log "polled %d events\n%!" (List.length events); *)
     List.iter (fun e -> handle_event e |> handle_error) events;
+    Gc.full_major ();
+    Jemalloc.release_free_memory ();
     poll_loop ()
   in
 

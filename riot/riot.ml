@@ -15,7 +15,7 @@ let run ?(rnd = Random.State.make_self_init ()) ?workers main =
     match workers with Some w -> Int.min w max_workers | None -> max_workers
   in
 
-  Log.debug (fun f -> f "Initializing Riot runtime...");
+  Log.debug (fun f -> f "Initializing Riot runtime [workers=%d]..." workers);
   Printexc.record_backtrace true;
   Core.Pid.reset ();
   Scheduler.Uid.reset ();

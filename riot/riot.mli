@@ -827,6 +827,7 @@ module Hashmap : sig
   type ('k, 'v) t
 
   val create : ?size:int -> unit -> ('k, 'v) t
+  val clear : ('k, 'v) t -> unit
   val get : ('k, 'v) t -> 'k -> 'v option
   val get_all : ('k, 'v) t -> 'k -> 'v list
   val is_empty : ('k, 'v) t -> bool
@@ -855,6 +856,7 @@ module Hashmap : sig
     type 'v t
 
     val create : ?size:int -> unit -> 'v t
+    val clear : 'v t -> unit
     val keys : 'v t -> key Seq.t
     val get : 'v t -> key -> 'v option
     val get_all : 'v t -> key -> 'v list

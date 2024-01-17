@@ -38,8 +38,11 @@ module Iovec = struct
     assert (count > 0);
     assert (size > 0);
     let size = size / count in
-    Array.init count (fun _id ->
-        { ba = Bytes.create size; off = 0; len = size })
+    let iov =
+      Array.init count (fun _id ->
+          { ba = Bytes.create size; off = 0; len = size })
+    in
+    iov
 
   let with_capacity size = create ~size ()
 

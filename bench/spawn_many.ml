@@ -12,7 +12,7 @@ module Test_app = struct
   let main t0 () =
     Logger.info (fun f -> f "boot test app");
     let pids =
-      List.init 1_000_000 (fun _i ->
+      List.init 10000 (fun _i ->
           spawn (fun () ->
               Logger.debug (fun f -> f "spawned %a" Pid.pp (self ()));
               loop 0))
@@ -32,13 +32,13 @@ module Test_app = struct
         let delta = Ptime.diff t1 t0 in
         let delta = Ptime.Span.to_float_s delta in
         f "spawned/awaited %d processes in %.3fs" (List.length pids) delta);
-    sleep 0.001;
-    shutdown ()
+    receive () |> ignore
 
   let start () =
+    Runtime.set_log_level (Some Info);
     Logger.set_log_level (Some Info);
     let t0 = Ptime_clock.now () in
     Ok (spawn_link (main t0))
 end
 
-let () = Riot.start ~apps:[ (module Logger); (module Test_app) ] ()
+let () = Riot.start ~workers:0 ~apps:[ (module Logger); (module Test_app) ] ()

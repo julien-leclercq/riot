@@ -128,3 +128,9 @@ let is_empty t =
 let create () =
   let dummy = { Node.value = Obj.magic (); next = Atomic.make Node.none } in
   { tail = Atomic.make dummy; head = dummy }
+
+let clear t =
+  let dummy = { Node.value = Obj.magic (); next = Atomic.make Node.none } in
+  t.head <- dummy;
+  Atomic.set t.tail dummy;
+  ()
