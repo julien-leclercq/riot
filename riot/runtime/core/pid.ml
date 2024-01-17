@@ -5,6 +5,8 @@ let make _id = { _id }
 let zero : t = make 0L
 let main : t = make 1L
 let __current__ = Atomic.make 1L
+let to_int64 t = t._id
+let of_int64 _id = { _id }
 
 let rec next () =
   let last = Atomic.get __current__ in

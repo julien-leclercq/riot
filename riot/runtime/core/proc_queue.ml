@@ -25,11 +25,10 @@ let remove t proc =
 
 let queue t proc =
   let ptr = Weak_ptr.make proc in
-  if Proc_set.contains t.alive ptr then begin
-    Log.error (fun f -> f "Skipped process %a from run_queue" Pid.pp proc.pid)
-  end
+  if Proc_set.contains t.alive ptr then
+    Log.trace (fun f -> f "Skipped process %a from run_queue" Pid.pp proc.pid)
   else (
-    Log.error (fun f -> f "Added process %a to run_queue" Pid.pp proc.pid);
+    Log.trace (fun f -> f "Added process %a to run_queue" Pid.pp proc.pid);
     Proc_set.add t.alive ptr;
     match Atomic.get proc.flags.priority with
     | High -> Lf_queue.push t.queue.high ptr

@@ -84,13 +84,13 @@ let make sid fn =
       syscall_timeout = Atomic.make None;
     }
   in
-  Log.error (fun f ->
+  Log.trace (fun f ->
       f "Making process with pid=%a (sizeof %d words)" Pid.pp pid
         (Obj.repr proc |> Obj.reachable_words));
   Gc.finalise
     (fun proc ->
-      Format.printf "finalized process with pid=%a (sizeof %d words)\r\n%!" Pid.pp
-        proc.pid
+      Format.printf "finalized process with pid=%a (sizeof %d words)\r\n%!"
+        Pid.pp proc.pid
         (Obj.repr proc |> Obj.reachable_words))
     proc;
   proc

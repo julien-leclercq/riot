@@ -338,7 +338,7 @@ module Scheduler = struct
     Proc_registry.remove pool.registry proc.pid;
     Proc_queue.remove sch.run_queue proc;
     Process.free proc;
-    Log.error (fun f -> f "terminated %a" Pid.pp proc.pid)
+    Log.trace (fun f -> f "terminated %a" Pid.pp proc.pid)
 
   let[@inline never] handle_run_proc pool (sch : t) proc =
     Log.trace (fun f -> f "Running process %a" Process.pp proc);
