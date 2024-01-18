@@ -6,7 +6,7 @@ open Logger.Make (struct
 end)
 
 type t = P.t
-type priority = P.priority = High | Normal | Low
+type priority = P.priority = High_priority | Normal_priority | Low_priority
 type process_flag = P.process_flag = Trap_exit of bool | Priority of priority
 
 let pp_flag fmt t =

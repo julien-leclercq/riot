@@ -103,7 +103,7 @@ module Process : sig
         Normal priority processes left.
 
    *)
-  type priority = High | Normal | Low
+  type priority = High_priority | Normal_priority | Low_priority
 
   (** A process flag is a configuration for the behavior of a process. *)
   type process_flag =

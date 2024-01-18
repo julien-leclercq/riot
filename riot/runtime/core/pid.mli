@@ -3,6 +3,7 @@ type t
 val main : t
 val zero : t
 val equal : t -> t -> bool
+val last : unit -> t
 val next : unit -> t
 val pp : Format.formatter -> t -> unit
 val reset : unit -> unit

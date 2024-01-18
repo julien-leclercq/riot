@@ -15,17 +15,17 @@ let main () =
 
   let _ =
     spawn (fun () ->
-        process_flag (Priority Low);
+        process_flag (Priority Low_priority);
         loop this A 100)
   in
   let _ =
     spawn (fun () ->
-        process_flag (Priority Normal);
+        process_flag (Priority Normal_priority);
         loop this B 100)
   in
   let _ =
     spawn (fun () ->
-        process_flag (Priority High);
+        process_flag (Priority High_priority);
         loop this C 100)
   in
 

@@ -279,7 +279,7 @@ module Scheduler = struct
     else Log.debug (fun f -> f "Hibernated process %a" Pid.pp proc.pid)
 
   let handle_exit_proc pool (sch : t) proc (reason : Process.exit_reason) =
-    Log.trace (fun f -> f "unregistering process %a" Pid.pp (Process.pid proc));
+    Log.trace (fun f -> f "exiting process %a" Pid.pp (Process.pid proc));
 
     Process.consume_ready_tokens proc (fun (_token, source) ->
         Gluon.Poll.deregister pool.io_scheduler.poll source |> Result.get_ok);
@@ -372,8 +372,14 @@ module Scheduler = struct
         Log.trace (fun f -> f "Process %a finished" Pid.pp proc.pid);
         add_to_run_queue sch proc
 
+  let handle_init_proc pool sch proc =
+    Log.trace (fun f -> f "Initializing process %a" Process.pp proc);
+    Process.init proc;
+    handle_run_proc pool sch proc
+
   let step_process pool (sch : t) (proc : Process.t) =
     match Process.state proc with
+    | Uninitialized -> handle_init_proc pool sch proc
     | Finalized -> failwith "finalized processes should never be stepped on"
     | Waiting_io _ -> ()
     | Waiting_message -> handle_wait_proc pool sch proc
@@ -387,20 +393,6 @@ module Scheduler = struct
     let exception Exit in
     (try
        while true do
-         Jemalloc.epoch ();
-
-         Log.trace (fun f ->
-             let gc_stat = Gc.quick_stat () in
-             f
-               "[gc: fragments=%d stack_size=%d live_blocks=%d compactions=%d \
-                live_words=%d]"
-               gc_stat.fragments gc_stat.stack_size gc_stat.live_blocks
-               gc_stat.compactions gc_stat.live_words);
-         Log.trace (fun f ->
-             let stats = Jemalloc.get_memory_stats () in
-             f "[jemalloc: allocated=%d active=%d resident=%d mapped=%d]"
-               stats.allocated stats.active stats.resident stats.mapped);
-
          if pool.stop then raise_notrace Exit;
 
          Mutex.lock sch.idle_mutex;
@@ -422,7 +414,6 @@ module Scheduler = struct
          done;
          tick_timers pool sch;
 
-         Jemalloc.release_free_memory ();
          ()
        done
      with Exit -> ());

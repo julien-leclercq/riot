@@ -31,9 +31,9 @@ let queue t proc =
     Log.trace (fun f -> f "Added process %a to run_queue" Pid.pp proc.pid);
     Proc_set.add t.alive ptr;
     match Atomic.get proc.flags.priority with
-    | High -> Lf_queue.push t.queue.high ptr
-    | Normal -> Lf_queue.push t.queue.normal ptr
-    | Low -> Lf_queue.push t.queue.low ptr)
+    | High_priority -> Lf_queue.push t.queue.high ptr
+    | Normal_priority -> Lf_queue.push t.queue.normal ptr
+    | Low_priority -> Lf_queue.push t.queue.low ptr)
 
 let next t =
   let queue =

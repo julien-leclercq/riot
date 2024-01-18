@@ -8,6 +8,8 @@ let __current__ = Atomic.make 1L
 let to_int64 t = t._id
 let of_int64 _id = { _id }
 
+let last () = make (Atomic.get __current__)
+
 let rec next () =
   let last = Atomic.get __current__ in
   let current = last |> Int64.succ in
